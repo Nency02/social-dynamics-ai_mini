@@ -20,9 +20,63 @@ from src.vision.Overlay import render_frame
 # Config
 # ---------------------------------------------------------------------------
 OUTPUT_JSON      = "outputs/keypoints.json"
+LIVE_DATA_JSON   = "outputs/live_data.json"
 JSON_EVERY_N     = 5       # write JSON every N frames (reduce I/O)
 CAMERA_INDEX     = 0
 FPS_WINDOW       = 30      # rolling window size for FPS smoothing
+
+
+def _normalize_role(old_role):
+    """Convert detailed roles to simplified classroom roles."""
+    if old_role == "Speaker":
+        return "Active"
+    elif old_role in ["Listener", "Engaged"]:
+        return "Moderate"
+    else:  # Peripheral, Isolated
+        return "Passive"
+
+
+def _create_live_data(people, group_metrics):
+    """Create classroom discussion analyzer output format."""
+    # Map students with roles
+    students = []
+    for person in people:
+        old_role = person.get("social_role", "Peripheral")
+        students.append({
+            "student_id": person.get("track_id"),
+            "role": _normalize_role(old_role),
+            "participation_score": person.get("participation_score", 0.0),
+        })
+
+    # Calculate metrics
+    if students:
+        most_active = max(students, key=lambda s: s["participation_score"])
+        most_active_id = most_active["student_id"]
+        participation_level = sum(s["participation_score"] for s in students) / len(students)
+
+        # Discussion balance: how evenly distributed participation is (inverse of variance)
+        scores = [s["participation_score"] for s in students]
+        if len(scores) > 1:
+            mean = sum(scores) / len(scores)
+            variance = sum((s - mean) ** 2 for s in scores) / len(scores)
+            discussion_balance = max(0, min(1, 1.0 - variance))
+        else:
+            discussion_balance = 1.0 if participation_level > 0 else 0.0
+    else:
+        most_active_id = None
+        participation_level = 0.0
+        discussion_balance = 0.0
+
+    return {
+        "timestamp": time.time(),
+        "total_students": len(students),
+        "students": students,
+        "metrics": {
+            "most_active_student": most_active_id,
+            "participation_level": round(participation_level, 4),
+            "discussion_balance": round(discussion_balance, 4),
+        },
+    }
 
 
 # ---------------------------------------------------------------------------
@@ -58,7 +112,15 @@ while True:
     people  = assign_track_ids(people, tracker_state)
 
     # ---- Behavior analysis ----
+   # ---- Behavior analysis ----
     people, group_metrics = analyze_social_dynamics(people)
+
+    # DEBUG: Print scores to console
+    for p in people:
+        print(f"ID:{p.get('track_id')} | Role:{p.get('social_role')} | "
+            f"Eng:{p.get('engagement_score'):.3f} | "
+            f"Dom:{p.get('dominance_score'):.3f} | "
+            f"Act:{p.get('activity_score'):.3f}")
 
     # ---- FPS ----
     elapsed = time.perf_counter() - t0
@@ -73,6 +135,7 @@ while True:
 
     # ---- JSON export (throttled) ----
     if frame_id % JSON_EVERY_N == 0:
+        # Original detailed output
         export_people = [
             {k: v for k, v in p.items() if k != "behavior_features"}
             for p in people
@@ -87,6 +150,11 @@ while True:
         }
         with open(OUTPUT_JSON, "w") as f:
             json.dump(payload, f, indent=2)
+
+        # Classroom discussion analyzer format
+        live_data = _create_live_data(people, group_metrics)
+        with open(LIVE_DATA_JSON, "w") as f:
+            json.dump(live_data, f, indent=2)
 
     if cv2.waitKey(1) == 27:   # ESC
         break

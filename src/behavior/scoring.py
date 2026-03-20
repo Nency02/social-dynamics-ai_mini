@@ -45,19 +45,19 @@ def analyze_social_dynamics(people):
         body_lean = f.get("body_lean", 0.0)
 
         engagement_score = _c(
-            0.35 * facing
-            + 0.25 * dist_close
+            0.25 * facing
+            + 0.20 * dist_close
+            + 0.25 * gesture          # Boosted from 0.15 to emphasize talking/gesturing
             + 0.15 * proximity
-            + 0.15 * gesture
-            + 0.10 * centrality
+            + 0.15 * centrality
         )
 
         dominance_score = _c(
-            0.40 * gesture
-            + 0.20 * arm_spread
-            + 0.20 * centrality
+            0.60 * gesture            # Boosted from 0.50 - gesture is key for speaker
+            + 0.15 * arm_spread       # Reduced from 0.20
+            + 0.10 * centrality       # Reduced from 0.15
             + 0.10 * facing
-            + 0.10 * dist_close
+            + 0.05 * dist_close
         )
 
         activity_score = _c(

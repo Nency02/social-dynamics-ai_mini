@@ -22,7 +22,8 @@ def assign_roles(people_with_scores):
         dominance = p.get("dominance_score", 0.0)
         activity = p.get("activity_score", 0.0)
 
-        if activity >= 0.30 or dominance >= 0.28 or engagement >= 0.22:
+        # LOWERED THRESHOLDS: Was 0.30, 0.28, 0.22 - now more permissive
+        if activity >= 0.10 or dominance >= 0.10 or engagement >= 0.08:
             p["social_role"] = "Engaged"
         else:
             p["social_role"] = "Peripheral"
@@ -34,15 +35,16 @@ def assign_roles(people_with_scores):
         reverse=True,
     )
 
-    speaker_id = None
-    if ranked:
-        top = ranked[0].get("dominance_score", 0.0)
-        second = ranked[1].get("dominance_score", 0.0) if len(ranked) > 1 else 0.0
-        if top >= 0.42 and (top - second) >= 0.07:
-            speaker_id = ranked[0].get("track_id")
+    # NEW APPROACH: Anyone above threshold is a Speaker (not just #1)
+    # This allows multiple people to be "Speakers" if they're both actively speaking
+    speaker_ids = set()
+    for person in ranked:
+        dominance = person.get("dominance_score", 0.0)
+        if dominance >= 0.12:  # Absolute threshold for being a speaker
+            speaker_ids.add(person.get("track_id"))
 
     for person in people_with_scores:
-        if person.get("track_id") == speaker_id:
+        if person.get("track_id") in speaker_ids:  # Check if in speaker_ids set
             person["social_role"] = "Speaker"
             continue
 
@@ -53,11 +55,12 @@ def assign_roles(people_with_scores):
         proximity = features.get("proximity_density", 0.0)
         centrality = features.get("group_centrality", 0.5)
 
-        if proximity < 0.12 or centrality < 0.18:
+        # LOWERED THRESHOLDS for better classroom detection
+        if proximity < 0.05 or centrality < 0.08:  # Was 0.12 and 0.18
             person["social_role"] = "Isolated"
-        elif engagement >= 0.42 and activity < 0.22:
+        elif engagement >= 0.18 and activity < 0.10:  # Was 0.42 and 0.22
             person["social_role"] = "Listener"
-        elif engagement >= 0.36 or dominance >= 0.32:
+        elif engagement >= 0.15 or dominance >= 0.12:  # Was 0.36 and 0.32
             person["social_role"] = "Engaged"
         else:
             person["social_role"] = "Peripheral"
