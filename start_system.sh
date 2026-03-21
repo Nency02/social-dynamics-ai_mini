@@ -26,7 +26,7 @@ fi
 
 # Start API in background
 echo "[1/2] Starting FastAPI Backend on port 8000..."
-python3 api.py > /tmp/api.log 2>&1 &
+cd backend && python3 api.py > /tmp/api.log 2>&1 &
 API_PID=$!
 sleep 2
 
@@ -44,7 +44,8 @@ echo "API Backend:     http://localhost:8000"
 echo "Health Check:    http://localhost:8000/health"
 echo "Data Endpoint:   http://localhost:8000/data"
 echo ""
-echo "Dashboard:       Open dashboard.html in your browser"
+echo "Frontend App:    Start frontend with: cd frontend && npm run dev"
+echo "Dashboard URL:   http://localhost:5173 (or Vite-selected port)"
 echo ""
 echo "To verify live data:"
 echo "  curl http://localhost:8000/data"
