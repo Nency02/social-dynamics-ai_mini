@@ -45,6 +45,7 @@ social-dynamics-ai/
 ```bash
 cd backend
 pip install -r requirements.txt
+pip install -r requirements-dev.txt
 ```
 
 ### Frontend
@@ -81,6 +82,33 @@ npm run dev
 
 Open the URL shown by Vite (commonly `http://localhost:5173` or `http://localhost:5174`).
 
+## Testing
+
+### Backend tests
+
+```bash
+cd backend
+pytest -q
+```
+
+Includes comprehensive tests for:
+- Person tracking stability (persistence when off-frame, no ID switching)
+- Behavior attribution accuracy (gesture/activity not misattributed to nearby people)
+- Scoring correctness (participation aggregation, role assignment)
+- API robustness (health checks, missing data handling)
+
+### Frontend build check
+
+```bash
+cd frontend
+npm run build
+```
+
+## Continuous Integration
+
+- GitHub Actions runs backend tests and frontend build on pull requests and pushes to `main`.
+- Workflow file: `.github/workflows/ci.yml`
+
 ## API
 
 ### `GET /health`
@@ -115,3 +143,20 @@ Returns live classroom analytics in this shape:
 - Runtime JSON files are written to `backend/outputs/`.
 - Participation and role labeling are heuristic and intended for classroom analytics prototypes.
 - For best detection quality, use stable lighting and keep all participants visible.
+
+## Person Tracking & Behavior Attribution
+
+**Tracking stability improvements:**
+- Multi-factor matching: Combines position distance + pose (shoulder angle) consistency to prevent misidentification
+- Extended persistence: Tracks maintain identity for up to 36 frames during occlusion/out-of-frame, then re-acquire on re-entry
+- Pose validation: Rejects matches where two people have opposite body orientations, preventing swaps
+
+**Behavior attribution safeguards:**
+- Each person's gesture/activity is computed only from their own keypoints
+- Proximity-based features (facing, group centrality) properly isolate per-person calculations
+- All behavior scores are attributed to the correct track_id via validated matching
+
+**Testing coverage:**
+- `tests/test_tracking.py`: Validates tracking persistence, cross-identification prevention, and pose matching
+- `tests/test_scoring.py`: Verifies participation averages include all detected people
+- `tests/test_api.py`: Ensures API returns accurate data in all scenarios

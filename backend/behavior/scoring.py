@@ -102,7 +102,7 @@ def analyze_social_dynamics(people):
 
         engagement_scores.append(engagement_score)
         dominance_scores.append(dominance_score)
-    participation_scores.append(participation_score)
+        participation_scores.append(participation_score)
 
     assign_roles(people)
 

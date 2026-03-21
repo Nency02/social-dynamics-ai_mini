@@ -11,6 +11,7 @@ import time
 from collections import deque
 
 from behavior.scoring import analyze_social_dynamics
+from behavior.roles import assign_roles
 from vision.pose import detect_pose
 from vision.keypoints import assign_track_ids, extract_keypoints
 from vision.Overlay import render_frame
@@ -126,6 +127,45 @@ frame_id     = 0
 tracker_state = {"next_track_id": 0, "tracks": {}, "previous_centers": {}}
 fps_history   = deque(maxlen=FPS_WINDOW)
 
+# Temporal smoothing: keep a rolling history of scores per track_id.
+# Speaker role requires sustained activity — not a single noisy frame.
+SCORE_HISTORY_LEN = 8   # smooth over last N frames (~0.5s at 15fps)
+score_history: dict = {}  # track_id -> deque of (dom, act, eng) tuples
+
+
+def _smooth_scores(people, history: dict, window: int = SCORE_HISTORY_LEN):
+    """
+    Replace per-person scores with a rolling average over recent frames.
+    This prevents a single noisy frame from triggering Speaker.
+    """
+    for person in people:
+        tid = person.get("track_id")
+        if tid is None:
+            continue
+        if tid not in history:
+            history[tid] = deque(maxlen=window)
+
+        history[tid].append((
+            person.get("dominance_score", 0.0),
+            person.get("activity_score",  0.0),
+            person.get("engagement_score", 0.0),
+        ))
+
+        if len(history[tid]) >= 2:   # only smooth once we have data
+            doms, acts, engs = zip(*history[tid])
+            person["dominance_score"]  = round(sum(doms) / len(doms), 4)
+            person["activity_score"]   = round(sum(acts) / len(acts), 4)
+            person["engagement_score"] = round(sum(engs) / len(engs), 4)
+    return people
+
+
+def _prune_score_history(history: dict, tracker_state: dict):
+    """Remove score history for tracks that are no longer active."""
+    active_tracks = set((tracker_state.get("tracks") or {}).keys())
+    stale_ids = [tid for tid in history.keys() if tid not in active_tracks]
+    for tid in stale_ids:
+        history.pop(tid, None)
+
 
 # ---------------------------------------------------------------------------
 # Main loop
@@ -144,10 +184,16 @@ while True:
     results = detect_pose(frame)
     people  = extract_keypoints(results)
     people  = assign_track_ids(people, tracker_state)
+    _prune_score_history(score_history, tracker_state)
 
     # ---- Behavior analysis ----
-   # ---- Behavior analysis ----
     people, group_metrics = analyze_social_dynamics(people)
+
+    # ---- Temporal smoothing (prevents single-frame noise triggering Speaker) ----
+    people = _smooth_scores(people, score_history)
+
+    # ---- Re-run role assignment on smoothed scores ----
+    assign_roles(people)
 
     # DEBUG: Print scores to console
     for p in people:
