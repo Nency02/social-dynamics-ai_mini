@@ -24,15 +24,15 @@ echo ============================================================
 echo  System Starting...
 echo ============================================================
 echo.
-echo API Backend:     http://localhost:8000
-echo Health Check:    http://localhost:8000/health
-echo Data Endpoint:   http://localhost:8000/data
+echo API Backend:     Auto-selects available port (8000/8001/8002/8080)
+echo Health Check:    Check console output for selected port
+echo Data Endpoint:   Dashboard auto-detects active API port
 echo.
 echo Frontend App:    Start frontend with: cd frontend ^&^& npm run dev
 echo Dashboard URL:   http://localhost:5173 (or Vite-selected port)
 echo.
-echo To verify live data:
-echo   curl http://localhost:8000/data
+echo To verify live data (replace PORT with selected value):
+echo   curl http://localhost:PORT/data
 echo.
 echo Press CTRL+C in camera window to stop the pipeline (ESC also works)
 echo Close API window to stop the server

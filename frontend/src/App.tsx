@@ -18,6 +18,7 @@ interface Student {
   id: number;
   participation: number;
   role: "Active" | "Moderate" | "Passive";
+  detailedRole?: string;
 }
 
 interface LiveData {
@@ -26,6 +27,7 @@ interface LiveData {
   students: Array<{
     student_id: number;
     role: "Active" | "Moderate" | "Passive";
+    detailed_role?: string;
     participation_score: number;
   }>;
   metrics: {
@@ -41,7 +43,20 @@ interface TrendPoint {
   balance: number;
 }
 
-const API_URL = import.meta.env.VITE_API_URL ?? "http://localhost:8000";
+const ENV_API_URL = import.meta.env.VITE_API_URL as string | undefined;
+const API_CANDIDATES = [
+  ...(ENV_API_URL ? [ENV_API_URL] : []),
+  "http://localhost:8000",
+  "http://127.0.0.1:8000",
+  "http://localhost:8001",
+  "http://127.0.0.1:8001",
+  "http://localhost:8002",
+  "http://127.0.0.1:8002",
+  "http://localhost:8080",
+  "http://127.0.0.1:8080",
+  "http://localhost:8100",
+  "http://127.0.0.1:8100",
+];
 
 export default function App() {
   const [students, setStudents] = useState<Student[]>([]);
@@ -53,10 +68,37 @@ export default function App() {
   const [currentTime, setCurrentTime] = useState(new Date());
   const [connected, setConnected] = useState(false);
   const [trend, setTrend] = useState<TrendPoint[]>([]);
+  const [apiBase, setApiBase] = useState<string | null>(ENV_API_URL ?? null);
+  const [pipelineRunning, setPipelineRunning] = useState(false);
+  const [pipelineLoading, setPipelineLoading] = useState(false);
+
+  const detectApiBase = async (): Promise<string | null> => {
+    for (const candidate of API_CANDIDATES) {
+      try {
+        const response = await fetch(`${candidate}/health`);
+        if (response.ok) {
+          return candidate;
+        }
+      } catch {
+        // Try next candidate.
+      }
+    }
+    return null;
+  };
 
   const fetchLiveData = async () => {
     try {
-      const response = await fetch(`${API_URL}/data`);
+      let base = apiBase;
+      if (!base) {
+        base = await detectApiBase();
+        setApiBase(base);
+      }
+
+      if (!base) {
+        throw new Error("No reachable API endpoint");
+      }
+
+      const response = await fetch(`${base}/data`);
       if (!response.ok) {
         throw new Error(`Request failed with status ${response.status}`);
       }
@@ -67,6 +109,7 @@ export default function App() {
         id: student.student_id,
         participation: Math.round(student.participation_score * 100),
         role: student.role,
+        detailedRole: student.detailed_role,
       }));
 
       const pLevel = Math.round(data.metrics.participation_level * 100);
@@ -100,17 +143,82 @@ export default function App() {
         return next.slice(-18);
       });
     } catch {
+      setApiBase(null);
       setConnected(false);
+    }
+  };
+
+  const checkPipelineStatus = async () => {
+    try {
+      let base = apiBase;
+      if (!base) {
+        base = await detectApiBase();
+        setApiBase(base);
+      }
+      if (!base) return;
+      
+      const response = await fetch(`${base}/pipeline/status`);
+      if (response.ok) {
+        const data = await response.json();
+        setPipelineRunning(data.running);
+      }
+    } catch {
+      // Silently fail
+    }
+  };
+
+  const handlePipelineStart = async () => {
+    setPipelineLoading(true);
+    try {
+      let base = apiBase;
+      if (!base) {
+        base = await detectApiBase();
+        setApiBase(base);
+      }
+      if (!base) throw new Error("No API endpoint");
+      
+      const response = await fetch(`${base}/pipeline/start`, { method: "POST" });
+      if (response.ok) {
+        setPipelineRunning(true);
+      }
+    } catch (error) {
+      console.error("Error starting pipeline:", error);
+    } finally {
+      setPipelineLoading(false);
+    }
+  };
+
+  const handlePipelineStop = async () => {
+    setPipelineLoading(true);
+    try {
+      let base = apiBase;
+      if (!base) {
+        base = await detectApiBase();
+        setApiBase(base);
+      }
+      if (!base) throw new Error("No API endpoint");
+      
+      const response = await fetch(`${base}/pipeline/stop`, { method: "POST" });
+      if (response.ok) {
+        setPipelineRunning(false);
+      }
+    } catch (error) {
+      console.error("Error stopping pipeline:", error);
+    } finally {
+      setPipelineLoading(false);
     }
   };
 
   useEffect(() => {
     fetchLiveData();
+    checkPipelineStatus();
     const dataTimer = window.setInterval(fetchLiveData, 1000);
+    const statusTimer = window.setInterval(checkPipelineStatus, 2000);
     const clockTimer = window.setInterval(() => setCurrentTime(new Date()), 1000);
 
     return () => {
       window.clearInterval(dataTimer);
+      window.clearInterval(statusTimer);
       window.clearInterval(clockTimer);
     };
   }, []);
@@ -139,7 +247,23 @@ export default function App() {
             <h1 className="text-4xl bg-gradient-to-r from-[#5867ff] via-[#00bcd4] to-[#ff5ab4] bg-clip-text text-transparent">
               Classroom Discussion Analytics
             </h1>
-            <div className="flex items-center gap-4 text-slate-600">
+            <div className="flex flex-col sm:flex-row items-center gap-4 text-slate-600">
+              <div className="flex items-center gap-3">
+                <button
+                  onClick={handlePipelineStart}
+                  disabled={pipelineRunning || pipelineLoading}
+                  className="px-4 py-2 rounded-lg bg-green-500 hover:bg-green-600 disabled:bg-gray-400 text-white font-medium transition-colors disabled:cursor-not-allowed"
+                >
+                  {pipelineLoading ? "Loading..." : "Start"}
+                </button>
+                <button
+                  onClick={handlePipelineStop}
+                  disabled={!pipelineRunning || pipelineLoading}
+                  className="px-4 py-2 rounded-lg bg-red-500 hover:bg-red-600 disabled:bg-gray-400 text-white font-medium transition-colors disabled:cursor-not-allowed"
+                >
+                  {pipelineLoading ? "Loading..." : "End"}
+                </button>
+              </div>
               <StatusIndicator connected={connected} />
               <div className="flex items-center gap-2 rounded-xl bg-white px-3 py-1.5">
                 <Clock3 className="h-4 w-4 text-[#5867ff]" />
@@ -232,6 +356,7 @@ export default function App() {
               studentId={`Student ${student.id}`}
               participation={student.participation}
               role={student.role}
+              detailedRole={student.detailedRole}
               index={index}
             />
           ))}

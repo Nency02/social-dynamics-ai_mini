@@ -14,16 +14,17 @@ def assign_roles(people_with_scores):
     if not people_with_scores:
         return people_with_scores
 
-    # Single-person scenes have no social proximity signal; classify using
-    # activity and self-engagement so the label is still meaningful.
+    # Single-person scenes have no social proximity signal; classify from
+    # self-expressiveness so solo speaking can still be detected.
     if len(people_with_scores) == 1:
         p = people_with_scores[0]
         engagement = p.get("engagement_score", 0.0)
         dominance = p.get("dominance_score", 0.0)
         activity = p.get("activity_score", 0.0)
 
-        # LOWERED THRESHOLDS: Was 0.30, 0.28, 0.22 - now more permissive
-        if activity >= 0.10 or dominance >= 0.10 or engagement >= 0.08:
+        if activity >= 0.18 or dominance >= 0.18:
+            p["social_role"] = "Speaker"
+        elif activity >= 0.10 or dominance >= 0.10 or engagement >= 0.08:
             p["social_role"] = "Engaged"
         else:
             p["social_role"] = "Peripheral"
@@ -40,32 +41,62 @@ def assign_roles(people_with_scores):
         reverse=True,
     )
 
+    def _speaking_evidence(person):
+        features = person.get("behavior_features", {})
+        dom = person.get("dominance_score", 0.0)
+        act = person.get("activity_score", 0.0)
+        eng = person.get("engagement_score", 0.0)
+        gesture = features.get("gesture_activity", 0.0)
+        arm_spread = features.get("arm_spread", 0.0)
+        body_lean = features.get("body_lean", 0.0)
+
+        # Require live visible speaking cues to avoid stale "Speaker" labels.
+        visibly_speaking = (
+            act >= 0.24
+            and (
+                gesture >= 0.20
+                or arm_spread >= 0.25
+                or (gesture >= 0.14 and body_lean >= 0.35)
+            )
+        )
+
+        propensity = (
+            0.45 * dom
+            + 0.25 * act
+            + 0.15 * gesture
+            + 0.10 * arm_spread
+            + 0.05 * eng
+        )
+        return visibly_speaking, propensity
+
     speaker_ids = set()
     if ranked:
-        top = ranked[0]
-        top_dom = top.get("dominance_score", 0.0)
-        top_act = top.get("activity_score", 0.0)
-        top_eng = top.get("engagement_score", 0.0)
+        evidence = []
+        for p in ranked:
+            visible, propensity = _speaking_evidence(p)
+            evidence.append((p, visible, propensity))
 
-        # Speaker requires clear evidence, not just slight movement.
-        if (top_dom >= 0.24 and top_act >= 0.22) or (top_dom >= 0.20 and top_eng >= 0.28):
-            speaker_ids.add(top.get("track_id"))
+        top_prop = evidence[0][2]
 
-        # Add a second speaker only when truly comparable.
-        if len(ranked) > 1 and speaker_ids:
-            second = ranked[1]
-            second_prop = (
-                0.50 * second.get("dominance_score", 0.0)
-                + 0.30 * second.get("activity_score", 0.0)
-                + 0.20 * second.get("engagement_score", 0.0)
-            )
-            top_prop = (
-                0.50 * top_dom
-                + 0.30 * top_act
-                + 0.20 * top_eng
-            )
-            if second_prop >= max(0.26, top_prop - 0.05):
-                speaker_ids.add(second.get("track_id"))
+        # Primary rule: choose up to two people with live speaking cues and
+        # propensity close to the top speaker in this frame.
+        visible_candidates = [
+            item
+            for item in evidence
+            if item[1] and item[2] >= 0.18 and (top_prop - item[2]) <= 0.08
+        ]
+        for p, _, _ in visible_candidates[:2]:
+            speaker_ids.add(p.get("track_id"))
+
+        # Backup rule: if no strong visible cues, avoid forcing a speaker too
+        # early; only mark one when confidence is clearly high.
+        if not speaker_ids:
+            top_person, top_visible, top_prop = evidence[0]
+            next_prop = evidence[1][2] if len(evidence) > 1 else 0.0
+            top_gap = top_prop - next_prop
+
+            if top_prop >= 0.28 and (top_visible or top_gap >= 0.07):
+                speaker_ids.add(top_person.get("track_id"))
 
     for person in people_with_scores:
         if person.get("track_id") in speaker_ids:  # Check if in speaker_ids set

@@ -73,6 +73,15 @@ cd backend
 python main.py
 ```
 
+If you want to force a specific webcam (for example, your external USB camera), set
+`CAMERA_INDEX` before running:
+
+```bash
+# Windows (PowerShell)
+$env:CAMERA_INDEX=1
+python main.py
+```
+
 ### 3) Start frontend
 
 ```bash

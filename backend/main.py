@@ -23,8 +23,38 @@ from vision.Overlay import render_frame
 OUTPUT_JSON      = os.path.join(os.path.dirname(__file__), "outputs", "keypoints.json")
 LIVE_DATA_JSON   = os.path.join(os.path.dirname(__file__), "outputs", "live_data.json")
 JSON_EVERY_N     = 5       # write JSON every N frames (reduce I/O)
-CAMERA_INDEX     = 0
 FPS_WINDOW       = 30      # rolling window size for FPS smoothing
+
+
+def _open_camera():
+    """Open a camera, preferring external webcams on Windows."""
+    env_camera = os.getenv("CAMERA_INDEX")
+    if env_camera is not None:
+        try:
+            candidates = [int(env_camera)]
+        except ValueError as exc:
+            raise RuntimeError("CAMERA_INDEX must be an integer") from exc
+    else:
+        # External USB webcams commonly appear on index 1+ while built-ins are index 0.
+        candidates = [1, 2, 0]
+
+    for idx in candidates:
+        cap = cv2.VideoCapture(idx, cv2.CAP_DSHOW)
+        if not cap.isOpened():
+            cap.release()
+            continue
+
+        ok, _ = cap.read()
+        if ok:
+            print(f"[INFO] Using camera index {idx}")
+            return cap
+
+        cap.release()
+
+    raise RuntimeError(
+        f"Cannot open any camera. Tried indices: {candidates}. "
+        "Set CAMERA_INDEX to your webcam index if needed."
+    )
 
 
 def _normalize_role(old_role):
@@ -49,6 +79,7 @@ def _create_live_data(people, group_metrics, tracker_state=None):
         students.append({
             "student_id": track_id,
             "role": _normalize_role(old_role),
+            "detailed_role": old_role,
             "participation_score": person.get("participation_score", 0.0),
         })
 
@@ -64,6 +95,7 @@ def _create_live_data(people, group_metrics, tracker_state=None):
                 inferred_students.append({
                     "student_id": int(track_id),
                     "role": "Passive",
+                    "detailed_role": "Inferred",
                     "participation_score": 0.0,
                     "inferred": True,
                 })
@@ -119,9 +151,7 @@ def _create_live_data(people, group_metrics, tracker_state=None):
 # ---------------------------------------------------------------------------
 os.makedirs(os.path.join(os.path.dirname(__file__), "outputs"), exist_ok=True)
 
-cap = cv2.VideoCapture(CAMERA_INDEX)
-if not cap.isOpened():
-    raise RuntimeError(f"Cannot open camera at index {CAMERA_INDEX}")
+cap = _open_camera()
 
 frame_id     = 0
 tracker_state = {"next_track_id": 0, "tracks": {}, "previous_centers": {}}

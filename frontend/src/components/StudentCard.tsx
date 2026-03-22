@@ -5,6 +5,7 @@ interface StudentCardProps {
   studentId: string;
   participation: number;
   role: "Active" | "Moderate" | "Passive";
+  detailedRole?: string;
   index: number;
 }
 
@@ -26,8 +27,9 @@ const roleConfig = {
   }
 };
 
-export function StudentCard({ studentId, participation, role, index }: StudentCardProps) {
+export function StudentCard({ studentId, participation, role, detailedRole, index }: StudentCardProps) {
   const config = roleConfig[role];
+  const isSpeaker = detailedRole === "Speaker";
 
   return (
     <motion.div
@@ -50,14 +52,21 @@ export function StudentCard({ studentId, participation, role, index }: StudentCa
           </div>
         </div>
 
-        <div
-          className="px-3 py-1 rounded-full text-xs"
-          style={{
-            backgroundColor: config.bgColor,
-            color: config.color
-          }}
-        >
-          {role}
+        <div className="flex items-center gap-2">
+          {isSpeaker && (
+            <div className="px-3 py-1 rounded-full text-xs bg-[rgba(255,90,120,0.14)] text-[#e23b64]">
+              Speaker
+            </div>
+          )}
+          <div
+            className="px-3 py-1 rounded-full text-xs"
+            style={{
+              backgroundColor: config.bgColor,
+              color: config.color
+            }}
+          >
+            {role}
+          </div>
         </div>
       </div>
 
