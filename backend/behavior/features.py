@@ -144,6 +144,10 @@ def _head_tilt(kps):
 
 
 def _facing_engagement(person, people):
+    """
+    Compute how much a person is oriented toward the group center.
+    Prevents cross-identification by only considering valid keypoints from THIS person's skeleton.
+    """
     kps = person.get("keypoints") or []
     if not kps:
         return 0.0
@@ -153,6 +157,7 @@ def _facing_engagement(person, people):
     if not (_is_valid(nose) and shoulder_mid is not None):
         return 0.0
 
+    # Facing direction is ONLY from this person's nose and shoulders
     facing = (float(nose[0]) - shoulder_mid[0], float(nose[1]) - shoulder_mid[1])
     facing_norm = math.hypot(*facing)
     if facing_norm < 1e-6:
