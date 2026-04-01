@@ -193,6 +193,14 @@ def assign_track_ids(people, tracker_state, max_match_distance=180.0, max_missed
 def extract_keypoints(results):
     people = []
 
+    def _bbox_from_keypoints(person_points):
+        valid = [(float(x), float(y)) for x, y in person_points if not (x == 0 and y == 0)]
+        if not valid:
+            return None
+        xs = [p[0] for p in valid]
+        ys = [p[1] for p in valid]
+        return [min(xs), min(ys), max(xs), max(ys)]
+
     for r in results:
         if r.keypoints is not None:
             keypoints = r.keypoints.xy.cpu().numpy()
@@ -218,6 +226,17 @@ def extract_keypoints(results):
                 person_keypoint_conf = None
                 if keypoint_conf is not None and i < len(keypoint_conf):
                     person_keypoint_conf = keypoint_conf[i].tolist()
+
+                # Some pose outputs may not include person boxes.
+                # Derive a robust box from keypoints so overlays still render.
+                if bbox_xyxy is None:
+                    bbox_xyxy = _bbox_from_keypoints(person)
+
+                # If detection confidence is missing, approximate from keypoint confidences.
+                if confidence is None and person_keypoint_conf:
+                    valid_conf = [float(c) for c in person_keypoint_conf if c is not None and c > 0]
+                    if valid_conf:
+                        confidence = round(sum(valid_conf) / len(valid_conf), 4)
 
                 people.append({
                     "id": i,

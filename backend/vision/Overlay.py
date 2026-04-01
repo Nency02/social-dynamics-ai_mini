@@ -59,6 +59,7 @@ def draw_person(frame, person):
 
     track_id = person.get("track_id", "?")
     role = person.get("social_role", "Unknown")
+    confidence = person.get("confidence", None)
     engagement = person.get("engagement_score", 0.0)
     dominance = person.get("dominance_score", 0.0)
     activity = person.get("activity_score", 0.0)
@@ -68,7 +69,8 @@ def draw_person(frame, person):
 
     cv2.rectangle(frame, (x1, y1), (x2, y2), color, thickness)
 
-    label = f"#{track_id}  {role}"
+    conf_txt = f" {confidence:.2f}" if isinstance(confidence, (float, int)) else ""
+    label = f"#{track_id}  {role}{conf_txt}"
     lbl_y = max(y1 - 6, 20)
     _text_bg(frame, label, (x1, lbl_y), 0.52, (255, 255, 255), 2, color)
 
@@ -78,9 +80,9 @@ def draw_person(frame, person):
     gap = 14
 
     bars = [
-        ("E", engagement, (50, 200, 50)),
-        ("D", dominance, (50, 50, 220)),
-        ("A", activity, (200, 160, 40)),
+        ("Eng", engagement, (50, 200, 50)),
+        ("Dom", dominance, (50, 50, 220)),
+        ("Act", activity, (200, 160, 40)),
     ]
     for i, (lbl, val, bcol) in enumerate(bars):
         bx = x1 + 4 + i * (bar_w + gap)
