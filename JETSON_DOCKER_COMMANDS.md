@@ -101,6 +101,13 @@ docker build -t social-ai .
 docker run -it --rm \
   --runtime nvidia \
   --network host \
+  -e YOLO_POSE_MODEL=yolov8n-pose.pt \
+  -e YOLO_IMGSZ=320 \
+  -e YOLO_MAX_DET=8 \
+  -e YOLO_CONF=0.25 \
+  -e YOLO_IOU=0.50 \
+  -e YOLO_HALF=1 \
+  -e YOLO_DEVICE=cuda:0 \
   --device /dev/video0 \
   social-ai
 ```
@@ -120,6 +127,13 @@ cd ~/social-dynamics-ai/backend
 docker run -it --rm \
   --runtime nvidia \
   --network host \
+  -e YOLO_POSE_MODEL=yolov8n-pose.pt \
+  -e YOLO_IMGSZ=320 \
+  -e YOLO_MAX_DET=8 \
+  -e YOLO_CONF=0.25 \
+  -e YOLO_IOU=0.50 \
+  -e YOLO_HALF=1 \
+  -e YOLO_DEVICE=cuda:0 \
   --device /dev/video0 \
   -w /app \
   social-ai \
@@ -162,6 +176,12 @@ If `nvidia` is missing, reinstall toolkit and restart Docker.
 ```text
 Jetson Camera -> Docker Container -> YOLO Pose Detection -> Behavior Analysis -> API -> Dashboard
 ```
+
+## Lightweight model notes (2GB Nano)
+
+- Keep `YOLO_IMGSZ=320` for lower RAM usage.
+- Keep `YOLO_MAX_DET` small (for example `6` to `8`) if many false detections appear.
+- If GPU memory is very tight, set `YOLO_HALF=0` and `YOLO_DEVICE=cpu`.
 
 ## Quick command block (copy/paste)
 

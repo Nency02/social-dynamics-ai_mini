@@ -34,7 +34,7 @@ social-dynamics-ai/
 
 ## Prerequisites
 
-- Python 3.10+
+- Python 3.8.18+
 - Node.js 18+
 - A working webcam
 
@@ -71,6 +71,27 @@ python api.py
 ```bash
 cd backend
 python main.py
+```
+
+For Jetson Nano 2GB (recommended lightweight settings):
+
+```bash
+cd backend
+export YOLO_POSE_MODEL=yolov8n-pose.pt
+export YOLO_IMGSZ=320
+export YOLO_MAX_DET=8
+export YOLO_CONF=0.25
+export YOLO_IOU=0.50
+export YOLO_HALF=1
+export YOLO_DEVICE=cuda:0
+python main.py
+```
+
+If CUDA is unavailable, use:
+
+```bash
+export YOLO_DEVICE=cpu
+export YOLO_HALF=0
 ```
 
 If you want to force a specific webcam (for example, your external USB camera), set
@@ -150,6 +171,11 @@ Returns live classroom analytics in this shape:
 ## Notes
 
 - Runtime JSON files are written to `backend/outputs/`.
+- Default pose model is `yolov8n-pose.pt` and can be changed with `YOLO_POSE_MODEL`.
+- Inference can be tuned with `YOLO_IMGSZ`, `YOLO_MAX_DET`, `YOLO_CONF`, `YOLO_IOU`, `YOLO_HALF`, and `YOLO_DEVICE`.
+- Jetson setup guides:
+  - Docker: `JETSON_DOCKER_COMMANDS.md`
+  - Native (no Docker): `JETSON_NATIVE_SETUP.md`
 - Participation and role labeling are heuristic and intended for classroom analytics prototypes.
 - For best detection quality, use stable lighting and keep all participants visible.
 
