@@ -191,6 +191,10 @@ def assign_track_ids(people, tracker_state, max_match_distance=180.0, max_missed
 
 
 def extract_keypoints(results):
+    if isinstance(results, list) and (not results or isinstance(results[0], dict)):
+        # Fallback mode may already return person dictionaries in project format.
+        return results
+
     people = []
 
     def _bbox_from_keypoints(person_points):
