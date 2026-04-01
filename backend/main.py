@@ -7,6 +7,7 @@ ESC to quit.
 import cv2
 import json
 import os
+import sys
 import time
 from collections import deque
 
@@ -27,7 +28,26 @@ FPS_WINDOW       = 30      # rolling window size for FPS smoothing
 
 
 def _open_camera():
-    """Open a camera, preferring external webcams on Windows."""
+    """Open a camera using platform-appropriate backends.
+
+    Supports:
+    - CAMERA_SOURCE for explicit device path or stream URL (e.g. /dev/video0)
+    - CAMERA_INDEX for integer camera index
+    """
+    env_source = os.getenv("CAMERA_SOURCE")
+    if env_source:
+        cap = cv2.VideoCapture(env_source)
+        if cap.isOpened():
+            ok, _ = cap.read()
+            if ok:
+                print(f"[INFO] Using camera source {env_source}")
+                return cap
+        cap.release()
+        raise RuntimeError(
+            f"Cannot open CAMERA_SOURCE={env_source}. "
+            "Check path/URL and camera permissions."
+        )
+
     env_camera = os.getenv("CAMERA_INDEX")
     if env_camera is not None:
         try:
@@ -35,25 +55,39 @@ def _open_camera():
         except ValueError as exc:
             raise RuntimeError("CAMERA_INDEX must be an integer") from exc
     else:
-        # External USB webcams commonly appear on index 1+ while built-ins are index 0.
-        candidates = [1, 2, 0]
+        # Linux/Jetson usually starts with /dev/video0 => index 0.
+        # Windows external USB webcams commonly appear on 1+.
+        candidates = [0, 1, 2] if sys.platform.startswith("linux") else [1, 2, 0]
 
     for idx in candidates:
-        cap = cv2.VideoCapture(idx, cv2.CAP_DSHOW)
-        if not cap.isOpened():
+        open_attempts = []
+        if sys.platform.startswith("win"):
+            open_attempts = [
+                lambda: cv2.VideoCapture(idx, cv2.CAP_DSHOW),
+                lambda: cv2.VideoCapture(idx),
+            ]
+        else:
+            open_attempts = [
+                lambda: cv2.VideoCapture(idx, cv2.CAP_V4L2),
+                lambda: cv2.VideoCapture(idx),
+            ]
+
+        for open_fn in open_attempts:
+            cap = open_fn()
+            if not cap.isOpened():
+                cap.release()
+                continue
+
+            ok, _ = cap.read()
+            if ok:
+                print(f"[INFO] Using camera index {idx}")
+                return cap
+
             cap.release()
-            continue
-
-        ok, _ = cap.read()
-        if ok:
-            print(f"[INFO] Using camera index {idx}")
-            return cap
-
-        cap.release()
 
     raise RuntimeError(
         f"Cannot open any camera. Tried indices: {candidates}. "
-        "Set CAMERA_INDEX to your webcam index if needed."
+        "Set CAMERA_INDEX (e.g. 0) or CAMERA_SOURCE (e.g. /dev/video0)."
     )
 
 
